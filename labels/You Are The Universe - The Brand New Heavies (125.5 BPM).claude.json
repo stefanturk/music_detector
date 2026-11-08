@@ -1,0 +1,93 @@
+{
+ "song": "You Are The Universe - The Brand New Heavies (125.5 BPM)",
+ "who": "claude",
+ "tap_lag_s": 0.0,
+ "basis": "stems + per-bar features, labelled blind before reading the user's taps",
+ "changes": [
+  {
+   "t": 9.4,
+   "name": "verse 1: vocals come in",
+   "strength": 1.0
+  },
+  {
+   "t": 17.0,
+   "name": "verse thins out (other instruments drop)",
+   "strength": 0.5
+  },
+  {
+   "t": 55.4,
+   "name": "hook 1: vocals jump up, drum fill into it",
+   "strength": 1.0
+  },
+  {
+   "t": 63.1,
+   "name": "back to verse-level vocals",
+   "strength": 0.5
+  },
+  {
+   "t": 70.8,
+   "name": "hook 2",
+   "strength": 0.5
+  },
+  {
+   "t": 78.4,
+   "name": "back to verse",
+   "strength": 0.5
+  },
+  {
+   "t": 86.1,
+   "name": "break: vocals out, bass thins then returns",
+   "strength": 1.0
+  },
+  {
+   "t": 93.8,
+   "name": "verse 2: vocals back",
+   "strength": 1.0
+  },
+  {
+   "t": 114.9,
+   "name": "hook 3 (new drum + chord change)",
+   "strength": 1.0
+  },
+  {
+   "t": 122.6,
+   "name": "back to verse",
+   "strength": 0.5
+  },
+  {
+   "t": 132.2,
+   "name": "hook 4",
+   "strength": 0.5
+  },
+  {
+   "t": 147.5,
+   "name": "drums drop out: vocals + bass only",
+   "strength": 1.0
+  },
+  {
+   "t": 161.0,
+   "name": "drums slam back in",
+   "strength": 1.0
+  },
+  {
+   "t": 162.9,
+   "name": "instrumental: vocals out, full band",
+   "strength": 0.5
+  },
+  {
+   "t": 176.3,
+   "name": "vocals return",
+   "strength": 1.0
+  },
+  {
+   "t": 184.0,
+   "name": "final hook",
+   "strength": 0.5
+  },
+  {
+   "t": 201.2,
+   "name": "outro: fade-out begins",
+   "strength": 1.0
+  }
+ ]
+}

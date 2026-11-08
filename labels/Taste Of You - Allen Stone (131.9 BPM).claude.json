@@ -1,0 +1,73 @@
+{
+ "song": "Taste Of You - Allen Stone (131.9 BPM)",
+ "who": "claude",
+ "tap_lag_s": 0.0,
+ "basis": "stems + per-bar features, labelled blind before reading the user's taps",
+ "changes": [
+  {
+   "t": 13.9,
+   "name": "bass line enters / starts moving (still intro)",
+   "strength": 0.5
+  },
+  {
+   "t": 21.2,
+   "name": "verse 1: vocals come in",
+   "strength": 1.0
+  },
+  {
+   "t": 50.3,
+   "name": "vocals peak, bass drops: pre-chorus/chorus lift",
+   "strength": 1.0
+  },
+  {
+   "t": 57.6,
+   "name": "groove settles, vocals peak again",
+   "strength": 0.5
+  },
+  {
+   "t": 75.9,
+   "name": "big bass-line change after a vocal dip",
+   "strength": 1.0
+  },
+  {
+   "t": 79.5,
+   "name": "bass drops out briefly",
+   "strength": 0.5
+  },
+  {
+   "t": 105.1,
+   "name": "bass line change, drums + bass full",
+   "strength": 1.0
+  },
+  {
+   "t": 116.0,
+   "name": "steady loop section starts, vocals peak",
+   "strength": 1.0
+  },
+  {
+   "t": 134.2,
+   "name": "bass line changes again (busy bass section)",
+   "strength": 1.0
+  },
+  {
+   "t": 161.6,
+   "name": "everything drops out (drums + other gone)",
+   "strength": 1.0
+  },
+  {
+   "t": 165.2,
+   "name": "full band slams back in",
+   "strength": 1.0
+  },
+  {
+   "t": 183.4,
+   "name": "other instruments lift and stay up (final push)",
+   "strength": 0.5
+  },
+  {
+   "t": 203.5,
+   "name": "ending hit",
+   "strength": 1.0
+  }
+ ]
+}

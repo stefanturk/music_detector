@@ -1,0 +1,39 @@
+{
+ "song": "Don't Stop 'Til You Get Enough - Michael Jackson",
+ "who": "user",
+ "tap_lag_s": 0.25,
+ "changes": [
+  {
+   "t": 16.66,
+   "name": ""
+  },
+  {
+   "t": 33.47,
+   "name": ""
+  },
+  {
+   "t": 97.39,
+   "name": ""
+  },
+  {
+   "t": 160.62,
+   "name": ""
+  },
+  {
+   "t": 177.63,
+   "name": ""
+  },
+  {
+   "t": 229.02,
+   "name": ""
+  },
+  {
+   "t": 259.64,
+   "name": ""
+  },
+  {
+   "t": 341.68,
+   "name": ""
+  }
+ ]
+}

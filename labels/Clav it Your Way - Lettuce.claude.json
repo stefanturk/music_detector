@@ -1,0 +1,63 @@
+{
+ "song": "Clav it Your Way - Lettuce",
+ "who": "claude",
+ "tap_lag_s": 0.0,
+ "basis": "stems + per-bar features, labelled blind before reading the user's taps",
+ "changes": [
+  {
+   "t": 9.3,
+   "name": "bass enters",
+   "strength": 0.5
+  },
+  {
+   "t": 33.3,
+   "name": "horns/keys come in",
+   "strength": 1.0
+  },
+  {
+   "t": 74.6,
+   "name": "hit",
+   "strength": 0.5
+  },
+  {
+   "t": 126.6,
+   "name": "build starts",
+   "strength": 0.5
+  },
+  {
+   "t": 160.0,
+   "name": "break",
+   "strength": 1.0
+  },
+  {
+   "t": 174.6,
+   "name": "new groove",
+   "strength": 1.0
+  },
+  {
+   "t": 224.0,
+   "name": "fill/groove",
+   "strength": 0.5
+  },
+  {
+   "t": 240.0,
+   "name": "peak section",
+   "strength": 1.0
+  },
+  {
+   "t": 288.0,
+   "name": "drop out",
+   "strength": 1.0
+  },
+  {
+   "t": 309.3,
+   "name": "band back in",
+   "strength": 1.0
+  },
+  {
+   "t": 338.6,
+   "name": "outro winds down",
+   "strength": 1.0
+  }
+ ]
+}

@@ -1,0 +1,63 @@
+{
+ "song": "Don't Stop 'Til You Get Enough - Michael Jackson",
+ "who": "claude",
+ "tap_lag_s": 0.0,
+ "basis": "stems + per-bar features, labelled blind before reading the user's taps",
+ "changes": [
+  {
+   "t": 32.6,
+   "name": "vocals in: verse 1",
+   "strength": 1.0
+  },
+  {
+   "t": 48.8,
+   "name": "pre-chorus",
+   "strength": 0.5
+  },
+  {
+   "t": 81.1,
+   "name": "chorus",
+   "strength": 1.0
+  },
+  {
+   "t": 105.3,
+   "name": "verse 2",
+   "strength": 0.5
+  },
+  {
+   "t": 159.8,
+   "name": "break/bridge",
+   "strength": 1.0
+  },
+  {
+   "t": 178.0,
+   "name": "groove returns",
+   "strength": 1.0
+  },
+  {
+   "t": 184.0,
+   "name": "vocals back",
+   "strength": 0.5
+  },
+  {
+   "t": 232.5,
+   "name": "lift",
+   "strength": 0.5
+  },
+  {
+   "t": 299.1,
+   "name": "strings/horns in",
+   "strength": 1.0
+  },
+  {
+   "t": 331.3,
+   "name": "breakdown",
+   "strength": 1.0
+  },
+  {
+   "t": 341.4,
+   "name": "outro",
+   "strength": 0.5
+  }
+ ]
+}

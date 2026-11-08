@@ -1,0 +1,123 @@
+{
+ "song": "JB's Out! - Ghost-Note (91.5 BPM)",
+ "who": "claude",
+ "tap_lag_s": 0.0,
+ "basis": "stems + per-bar features, labelled blind before reading the user's taps",
+ "changes": [
+  {
+   "t": 7.4,
+   "name": "drums in: groove",
+   "strength": 1.0
+  },
+  {
+   "t": 19.8,
+   "name": "bass back",
+   "strength": 0.5
+  },
+  {
+   "t": 76.7,
+   "name": "new section",
+   "strength": 1.0
+  },
+  {
+   "t": 106.9,
+   "name": "build",
+   "strength": 0.5
+  },
+  {
+   "t": 128.3,
+   "name": "break",
+   "strength": 1.0
+  },
+  {
+   "t": 131.7,
+   "name": "back in",
+   "strength": 1.0
+  },
+  {
+   "t": 135.3,
+   "name": "sparse section",
+   "strength": 1.0
+  },
+  {
+   "t": 202.9,
+   "name": "build",
+   "strength": 0.5
+  },
+  {
+   "t": 222.5,
+   "name": "lift",
+   "strength": 0.5
+  },
+  {
+   "t": 238.5,
+   "name": "lift",
+   "strength": 0.5
+  },
+  {
+   "t": 256.3,
+   "name": "break",
+   "strength": 1.0
+  },
+  {
+   "t": 259.5,
+   "name": "back in",
+   "strength": 1.0
+  },
+  {
+   "t": 263.1,
+   "name": "sparse",
+   "strength": 1.0
+  },
+  {
+   "t": 266.6,
+   "name": "back",
+   "strength": 0.5
+  },
+  {
+   "t": 279.1,
+   "name": "vocals in",
+   "strength": 1.0
+  },
+  {
+   "t": 293.2,
+   "name": "vocals up",
+   "strength": 0.5
+  },
+  {
+   "t": 309.2,
+   "name": "vocals drop",
+   "strength": 0.5
+  },
+  {
+   "t": 314.6,
+   "name": "vocals back",
+   "strength": 1.0
+  },
+  {
+   "t": 321.7,
+   "name": "drums up",
+   "strength": 0.5
+  },
+  {
+   "t": 357.2,
+   "name": "change",
+   "strength": 0.5
+  },
+  {
+   "t": 373.3,
+   "name": "dip",
+   "strength": 0.5
+  },
+  {
+   "t": 391.1,
+   "name": "break",
+   "strength": 1.0
+  },
+  {
+   "t": 394.4,
+   "name": "back in",
+   "strength": 1.0
+  }
+ ]
+}
