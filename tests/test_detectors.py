@@ -140,3 +140,37 @@ def test_line_singers_needs_lines_and_mics():
                                lines=[(1.0, 2.0)]) == []
     assert studio.line_singers(0.0, 10.0, "/nonexistent", stem_dir="/nonexistent",
                                vocal_files=["a.wav"], lines=[]) == []
+
+
+def _ring(decay_s, tail_s, floor=0.001):
+    """A song at level 1 with a final hit at 1.5, its ring decaying exponentially -40 dB over
+    decay_s, then the room floor."""
+    song = steady(30.0, 1.0)
+    hit = np.full(frames(0.2), 1.5)
+    k = np.arange(frames(decay_s))
+    ring = 1.5 * 10 ** (-2.0 * k / max(len(k), 1))
+    return np.concatenate([song, hit, ring, np.full(frames(tail_s), floor)])
+
+
+def test_the_last_chord_and_its_ring_out():
+    b = _ring(4.0, 4.0)
+    e = D.ending(b, song_n=frames(32.0))
+    assert e and abs(e["last_hit"] - 30.0) <= 0.2
+    # -30 dB of a -40 dB decay over 4 s is 3 s after the hit (plus the 0.2 s hit)
+    assert abs(e["ring_end"] - 33.2) <= 0.3 and e["confidence"] >= 0.9
+
+
+def test_a_band_that_stops_dead_has_no_ring():
+    b = np.concatenate([steady(30.0, 1.0), np.full(frames(4.0), 0.001)])
+    assert D.ending(b) is None
+
+
+def test_a_band_still_playing_at_the_end_has_no_ring():
+    assert D.ending(steady(40.0, 1.0)) is None
+
+
+def test_the_last_chord_must_start_inside_the_song():
+    # the next song starts loud right after a short gap: its chords aren't this song's ending
+    b = np.concatenate([_ring(3.0, 1.0), steady(1.0, 0.0005), steady(3.0, 1.0), steady(1.0, 0.0005)])
+    e = D.ending(b, song_n=frames(31.0))
+    assert e is None or e["last_hit"] <= 31.5

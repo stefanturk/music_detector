@@ -351,3 +351,65 @@ def trading(spans):
         else:
             out.append({"pair": pair, "start": sp["start_s"], "end": sp["end_s"]})
     return out
+
+
+# ---- the ending: the last chord ringing out ------------------------------------------------------
+RING_LOOK_S = 20.0        # the last chord is looked for in the song's final this-many seconds
+RING_LOUD = 0.5           # "the band is loud": this fraction of its 90th-percentile level
+RING_DROP_DB = 30.0       # the ring is over when the band is this far under the last hit...
+RING_FLOOR_X = 2.0        # ...or within this many times its quietest second in the song...
+RING_HOLD_S = 1.0         # ...for this long
+RING_MAX_S = 10.0         # a ring-out is at most this long
+RING_MIN_S = 1.5          # shorter than this isn't a ring-out (the band just stopped)
+RING_PAST_S = 8.0         # the ring may run on this long past the song's labelled end
+
+
+def ending(band, hop=HOP, song_n=None):
+    """The song's last chord and where its ring dies away, from the band's summed level (close
+    mics, so the crowd hardly counts): {last_hit, ring_end, confidence} in song seconds, or None
+    when the band is still playing at the end, or just stops (no ring). `band` may run on past
+    the song's labelled end (`song_n` frames, default all of it): the last chord must start
+    inside the song, its ring may run on into the extra."""
+    b = np.asarray(band, dtype=float)
+    n = len(b)
+    song_n = min(n, int(song_n or n))
+    if song_n < int(5.0 / hop):
+        return None
+    b = _smooth(b, max(1, int(round(0.15 / hop))))
+    ref = float(np.percentile(b[:song_n], 90)) + 1e-12
+    tail = int(round(0.5 / hop))
+    if float(b[-tail:].mean()) >= RING_LOUD * ref:
+        return None                                          # still playing at the very end
+    lo = max(0, song_n - int(round(RING_LOOK_S / hop)))
+    loud = np.nonzero(b[lo:song_n + int(round(0.5 / hop))] >= RING_LOUD * ref)[0]
+    if not len(loud):
+        return None
+    last_loud = lo + int(loud[-1])
+    w0 = max(0, last_loud - int(round(1.0 / hop)))
+    hit = w0 + int(np.argmax(b[w0:last_loud + 1]))
+    peak = float(b[hit])
+    sec = max(1, int(round(1.0 / hop)))
+    # the floor: the quietest second anywhere (the gap after the song, when it's there)
+    quiet = float(np.min(np.convolve(b, np.ones(sec) / sec, mode="valid"))) if n > sec else 0.0
+    thr = max(peak * 10 ** (-RING_DROP_DB / 20.0), quiet * RING_FLOOR_X)
+    hold = max(1, int(round(RING_HOLD_S / hop)))
+    cap = min(n, hit + int(round(RING_MAX_S / hop)))
+    end, i = None, hit + 1
+    while i < cap:
+        if b[i] < thr:
+            j = i
+            while j < min(n, i + hold) and b[j] < thr:
+                j += 1
+            if j - i >= hold or j >= n:
+                end = i
+                break
+            i = j
+        i += 1
+    reached = end is not None
+    if end is None:
+        end = cap - 1
+    if (end - hit) * hop < RING_MIN_S:
+        return None
+    drop = 20 * np.log10(peak / max(float(b[min(end, n - 1)]), 1e-12))
+    conf = min(1.0, max(0.0, drop / RING_DROP_DB)) * (1.0 if reached else 0.6)
+    return {"last_hit": _sec(hit, hop), "ring_end": _sec(end, hop), "confidence": round(conf, 2)}

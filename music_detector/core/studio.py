@@ -30,6 +30,7 @@ from music_detector.core import detectors as D
 from music_detector.core import whoplays as W
 
 SCHEMA = 1
+VERSION = 2              # 2: + ending (the last chord's ring-out)
 _TOM = re.compile(r"\b(tom|toms|floor)\b", re.I)
 _KS = re.compile(r"\b(kick|kik|bd|snare|snr|sd)\b", re.I)
 
@@ -73,7 +74,8 @@ def _mic_act(files, cache_dir, stem_dir, lag, n):
 def detect(stem_offset_s, song_len_s, cache_dir, *, stem_dir, voices, player=None, lines=None,
            spans=None, song=None):
     player = player or {}
-    act, lag, n, _ = activity(stem_offset_s, song_len_s, cache_dir, stem_dir=stem_dir, voices=voices)
+    act, lag, n, voice_full = activity(stem_offset_s, song_len_s, cache_dir, stem_dir=stem_dir,
+                                       voices=voices)
     playing = {v: D.playing_mask(a) for v, a in act.items()}
     sing = D.singing_mask(n, lines, act.get("VOCAL"))
     # a voice's player, when all its stems name the same person (SAX: Drew; VOCAL: several -> None)
@@ -110,7 +112,18 @@ def detect(stem_offset_s, song_len_s, cache_dir, *, stem_dir, voices, player=Non
         "entrances": D.entrances(act, playing),
         "singers": singers,
         "best": D.best_moments(feat, player_of=player_of),
+        "ending": D.ending(band_level(voice_full, lag, n + int(round(D.RING_PAST_S / D.HOP))),
+                           song_n=n),
     }
+
+
+def band_level(voice_full, lag, n):
+    """The band's summed level over the song (every voice but the vocal mics: they hear the
+    crowd and the talking)."""
+    parts = [_window(e, lag, n) for v, e in voice_full.items() if v != "VOCAL"]
+    if not parts:
+        return np.zeros(n)
+    return np.sqrt(sum(p ** 2 for p in parts))
 
 
 def line_singers(stem_offset_s, song_len_s, cache_dir, *, stem_dir, vocal_files, player=None,
