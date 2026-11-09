@@ -144,7 +144,8 @@ def _median_smooth(labels, win):
 
 
 
-def analyze_song(song_file, cache_dir, *, song_dir, stem_dir, voices, full_show=None, player=None):
+def analyze_song(song_file, cache_dir, *, song_dir, stem_dir, voices, full_show=None, player=None,
+                 bleed_guard=False):
     """Who's-playing timeline for one per-song wav (`song_dir`/`song_file`), located inside the
     whole-show stems by cross-correlating its envelope against the stem mix. Also finds the song's
     start in the full-show (north-star) mix when one is given, for later authoring."""
@@ -166,14 +167,14 @@ def analyze_song(song_file, cache_dir, *, song_dir, stem_dir, voices, full_show=
         tn_lag_s, tn_score = None, None
 
     return _timeline_core(lag, n, cache_dir, voices=voices, stem_dir=stem_dir, player=player,
-                          voice_full=voice_full, song=song_file,
+                          voice_full=voice_full, song=song_file, bleed_guard=bleed_guard,
                           stem_offset_s=round(lag_s, 2), stem_align_score=round(score, 1),
                           truenorth_offset_s=(None if tn_lag_s is None else round(tn_lag_s, 2)))
 
 
 def _timeline_core(lag, n, cache_dir, *, voices, stem_dir, voice_full, player=None,
                    song=None, stem_offset_s=None, stem_align_score=None,
-                   truenorth_offset_s=None):
+                   truenorth_offset_s=None, bleed_guard=False):
     """Shared who's-playing detection over a window [lag, lag+n) of the whole-show per-voice
     energy envelopes. Both the per-song-wav path (analyze_song) and the single-file window
     path (analyze_window) feed it the same way; only how lag/n are found differs. No AI."""
@@ -194,6 +195,9 @@ def _timeline_core(lag, n, cache_dir, *, voices, stem_dir, voice_full, player=No
             stem_full[f] = stem_env(os.path.join(stem_dir, f), cache_dir)
     phi_v = {v: (np.percentile(voice_full[v], PCT_HI) + 1e-9) for v in voices}
     act = {v: win(voice_full[v]) / phi_v[v] for v in voices}
+    if bleed_guard:                      # horn mics that only hear the band aren't playing
+        from music_detector.core import eq as _eq
+        act = _eq.guard_activity(act, voices, stem_dir, lag, n, HOP)
     # Only three categories behave differently, so only these are referenced by name; give one the
     # show lacks a silent track rather than KeyError (an absent voice stays below every threshold).
     for _v in ("VOCAL", "BASS", "DRUMS"):
@@ -375,7 +379,7 @@ def _timeline_core(lag, n, cache_dir, *, voices, stem_dir, voice_full, player=No
 
 
 def analyze_window(start_s, end_s, cache_dir, *, stem_dir, voices, full_show,
-                   song=None, player=None):
+                   song=None, player=None, bleed_guard=False):
     """Who's-playing timeline for a song that is a WINDOW [start_s, end_s] (seconds) into the
     show's one continuous north-star recording -- the common case, where there is NO separate
     per-song wav. Instead of locating a wav by cross-correlation, it slices the whole-show
@@ -396,13 +400,13 @@ def analyze_window(start_s, end_s, cache_dir, *, stem_dir, voices, full_show,
     lag = max(0, int(round((start_s + g_lag_s) / HOP)))
     n = max(1, int(round((end_s - start_s) / HOP)))
     return _timeline_core(lag, n, cache_dir, voices=voices, stem_dir=stem_dir, player=player,
-                          voice_full=voice_full, song=song,
+                          voice_full=voice_full, song=song, bleed_guard=bleed_guard,
                           stem_offset_s=round(lag * HOP, 2), stem_align_score=None,
                           truenorth_offset_s=round(start_s, 2))
 
 
 def analyze_parts(parts_dir, pad_s, song_len_s, cache_dir, *, voices, song=None, player=None,
-                  truenorth_offset_s=None):
+                  truenorth_offset_s=None, bleed_guard=False):
     """Who's-playing timeline for ONE song's parts split out of a mix (music_detector.separate):
     every file in `parts_dir` starts `pad_s` seconds before the song, so the song is the window
     [pad_s, pad_s + song_len_s) of them -- no alignment needed. Same detection as analyze_window."""
@@ -411,7 +415,8 @@ def analyze_parts(parts_dir, pad_s, song_len_s, cache_dir, *, voices, song=None,
     n = max(1, int(round(song_len_s / HOP)))
     return _timeline_core(lag, n, cache_dir, voices=voices, stem_dir=parts_dir, player=player,
                           voice_full=voice_full, song=song, stem_offset_s=round(lag * HOP, 2),
-                          stem_align_score=None, truenorth_offset_s=truenorth_offset_s)
+                          stem_align_score=None, truenorth_offset_s=truenorth_offset_s,
+                          bleed_guard=bleed_guard)
 
 
 def report(tl):

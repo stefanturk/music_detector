@@ -17,7 +17,9 @@ import numpy as np
 
 RATE = 16000
 BIN_S = 0.5                 # ownership is judged per half second
-BANDS = {"VOCAL": (2000.0, 5000.0), "SAX": (1000.0, 4000.0), "TRUMPET": (1000.0, 4000.0)}
+BANDS = {"VOCAL": (2000.0, 5000.0), "SAX": (1000.0, 4000.0), "TRUMPET": (1000.0, 4000.0),
+         "TROMBONE": (1000.0, 4000.0), "HORNS": (1000.0, 4000.0)}
+GUARD_VOICES = ("SAX", "TRUMPET", "TROMBONE", "HORNS")      # the bleed guard's voices (per-show switch)
 ABOVE_DB = 10.0             # this far above the mic's resting ratio (its 20th percentile)
 REST_PCT = 20
 NOT_BAND = re.compile(r"\b(TOM|TOMS)\b", re.I)
@@ -95,3 +97,18 @@ def voice_ownership(voices, stem_dir, start_s, dur_s, n_frames, hop, voice="VOCA
     if len(frames) < n_frames:
         frames = np.concatenate([frames, np.zeros(n_frames - len(frames), dtype=bool)])
     return frames
+
+
+def guard_activity(act, voices, stem_dir, lag, n, hop, ffmpeg=None):
+    """The bleed guard: each horn voice's activity (`act` {voice: array}, a window of `n` frames
+    starting at frame `lag`, `hop` seconds each) is zeroed where its mics don't OWN the horn range,
+    so a horn mic that only hears the band isn't "playing". Falls back to the level as it was for a
+    voice that can't be judged. Returns a new dict; `act` is untouched."""
+    out = dict(act)
+    for v in GUARD_VOICES:
+        if v not in out:
+            continue
+        own = voice_ownership(voices, stem_dir, lag * hop, n * hop, n, hop, voice=v, ffmpeg=ffmpeg)
+        if own is not None:
+            out[v] = np.asarray(out[v]) * own[:len(out[v])]
+    return out

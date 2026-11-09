@@ -46,7 +46,7 @@ def _window(e, lag, n):
     return seg
 
 
-def activity(stem_offset_s, song_len_s, cache_dir, *, stem_dir, voices):
+def activity(stem_offset_s, song_len_s, cache_dir, *, stem_dir, voices, bleed_guard=False):
     """Per-voice activity over the song, exactly as whoplays computes it (each voice divided by its
     92nd-percentile level over the whole show). Returns (act, lag, n, voice_full)."""
     voice_full = {v: W._energy_sum(files, cache_dir, stem_dir) for v, files in voices.items()}
@@ -54,6 +54,9 @@ def activity(stem_offset_s, song_len_s, cache_dir, *, stem_dir, voices):
     n = max(1, int(round(song_len_s / W.HOP)))
     act = {v: _window(voice_full[v], lag, n) / (np.percentile(voice_full[v], W.PCT_HI) + 1e-9)
            for v in voices}
+    if bleed_guard:
+        from music_detector.core import eq as _eq
+        act = _eq.guard_activity(act, voices, stem_dir, lag, n, W.HOP)
     return act, lag, n, voice_full
 
 
@@ -72,10 +75,10 @@ def _mic_act(files, cache_dir, stem_dir, lag, n):
 
 
 def detect(stem_offset_s, song_len_s, cache_dir, *, stem_dir, voices, player=None, lines=None,
-           spans=None, song=None):
+           spans=None, song=None, bleed_guard=False):
     player = player or {}
     act, lag, n, voice_full = activity(stem_offset_s, song_len_s, cache_dir, stem_dir=stem_dir,
-                                       voices=voices)
+                                       voices=voices, bleed_guard=bleed_guard)
     playing = {v: D.playing_mask(a) for v, a in act.items()}
     sing = D.singing_mask(n, lines, act.get("VOCAL"))
     # a voice's player, when all its stems name the same person (SAX: Drew; VOCAL: several -> None)
