@@ -132,3 +132,11 @@ def test_median_smooth_ties_do_not_depend_on_hashing():
     a = W._median_smooth(labels, 5)
     assert a[4] == "KEYS"            # K S [G] K S: a 2-2 tie, the frame's own label isn't in it,
     assert W._median_smooth(["A", "B", "B", "A", "C"], 5)[2] == "B"   # so the first seen wins; own wins
+
+
+def test_line_singers_needs_lines_and_mics():
+    from music_detector.core import studio
+    assert studio.line_singers(0.0, 10.0, "/nonexistent", stem_dir="/nonexistent", vocal_files=[],
+                               lines=[(1.0, 2.0)]) == []
+    assert studio.line_singers(0.0, 10.0, "/nonexistent", stem_dir="/nonexistent",
+                               vocal_files=["a.wav"], lines=[]) == []

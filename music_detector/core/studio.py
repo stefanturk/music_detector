@@ -113,6 +113,17 @@ def detect(stem_offset_s, song_len_s, cache_dir, *, stem_dir, voices, player=Non
     }
 
 
+def line_singers(stem_offset_s, song_len_s, cache_dir, *, stem_dir, vocal_files, player=None,
+                 lines=None):
+    """Who sings each lyric line: the loudest of the VOCAL mics over it -> [{start, end, stem,
+    player}] (the `singers` part of detect, for when the lyrics are made after the analysis)."""
+    if not (lines and vocal_files):
+        return []
+    lag = max(0, int(round(stem_offset_s / W.HOP)))
+    n = max(1, int(round(song_len_s / W.HOP)))
+    return D.line_singers(lines, _mic_act(vocal_files, cache_dir, stem_dir, lag, n), player or {})
+
+
 def summary(res):
     """A short readable report (no lyrics): fills, solos, best moments, singers per person."""
     def mmss(s):
