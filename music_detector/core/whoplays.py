@@ -401,6 +401,19 @@ def analyze_window(start_s, end_s, cache_dir, *, stem_dir, voices, full_show,
                           truenorth_offset_s=round(start_s, 2))
 
 
+def analyze_parts(parts_dir, pad_s, song_len_s, cache_dir, *, voices, song=None, player=None,
+                  truenorth_offset_s=None):
+    """Who's-playing timeline for ONE song's parts split out of a mix (music_detector.separate):
+    every file in `parts_dir` starts `pad_s` seconds before the song, so the song is the window
+    [pad_s, pad_s + song_len_s) of them -- no alignment needed. Same detection as analyze_window."""
+    voice_full = {v: _energy_sum(files, cache_dir, parts_dir) for v, files in voices.items()}
+    lag = max(0, int(round(pad_s / HOP)))
+    n = max(1, int(round(song_len_s / HOP)))
+    return _timeline_core(lag, n, cache_dir, voices=voices, stem_dir=parts_dir, player=player,
+                          voice_full=voice_full, song=song, stem_offset_s=round(lag * HOP, 2),
+                          stem_align_score=None, truenorth_offset_s=truenorth_offset_s)
+
+
 def report(tl):
     """Readable summary Stefan can check against the song by ear."""
     def mmss(s):
