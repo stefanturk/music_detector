@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "music-detector"
+version = "0.1.0"
+description = "What the band is doing, read from a multitrack recording (studio mode; live mode later)."
+requires-python = ">=3.9"
+dependencies = ["numpy>=1.24"]
+
+[project.optional-dependencies]
+workbench = ["librosa"]          # only the old section-change workbench in workbench/ uses it
+test = ["pytest"]
+
+[tool.setuptools.packages.find]
+include = ["music_detector*"]
