@@ -17,6 +17,10 @@ Install editable into the app's Python: `pip install -e ../music_detector` (nump
 
 Live mode (streaming the same detectors, for stage_lighting) is not built yet.
 
+## Finding songs (`music_detector.split`)
+
+Finds the songs in one long live-set recording: loudness hysteresis, thresholds from the show's own levels. It moved here from movie_maker's `set_splitter.py`, which now re-exports it. `python3 -m music_detector.split <file>`.
+
 ## Song export (`music_detector.songs`)
 
 Cuts a show's one long recording into its songs (`01 - Black Heart.wav` + `.mp3`, 50 ms fades). Movie Maker and Ableton Loader share it. The folder's `.song_export.json` manifest means only songs whose window changed render again, songs that are gone get their files removed, and apps can tell the folder is an export, not show media.
