@@ -17,6 +17,10 @@ Install editable into the app's Python: `pip install -e ../music_detector` (nump
 
 Live mode (streaming the same detectors, for stage_lighting) is not built yet.
 
+## Song export (`music_detector.songs`)
+
+Cuts a show's one long recording into its songs (`01 - Black Heart.wav` + `.mp3`, 50 ms fades). Movie Maker and Ableton Loader share it. The folder's `.song_export.json` manifest means only songs whose window changed render again, songs that are gone get their files removed, and apps can tell the folder is an export, not show media.
+
 ## Workbench (`workbench/`) — shelved section-change experiments
 Shelved 2026-11-07. An offline Mac workbench for "did the music just change section?", built to
 drive Auto Scene's "On Change" in `stage_lighting`. Not good enough yet, so it was taken out of
