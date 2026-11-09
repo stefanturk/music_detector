@@ -64,3 +64,13 @@ def test_a_song_without_a_window_is_reported_not_guessed(tmp_path):
     _tone(src, 5)
     res = S.export(str(src), [{"number": 1, "name": "X"}], str(tmp_path / "o"))
     assert not res["ok"] and "no start/end" in res["errors"][0]
+
+
+def test_files_carry_title_track_band_and_show(tmp_path):
+    src = tmp_path / "show.wav"
+    _tone(src)
+    out = tmp_path / "Songs"
+    S.export(str(src), SONGS[:1], str(out), artist="Litty deBungus", album="Ivy Room")
+    r = subprocess.run([FF, "-i", str(out / "01 - Black Heart.mp3")], capture_output=True, text=True)
+    low = r.stderr.lower()
+    assert "black heart" in low and "litty debungus" in low and "ivy room" in low

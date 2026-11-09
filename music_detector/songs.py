@@ -64,14 +64,18 @@ def _write_manifest(out_dir, d):
     os.replace(tmp, p)
 
 
-def _render(ffmpeg, source, start, dur, fade, out_path, fmt):
+def _render(ffmpeg, source, start, dur, fade, out_path, fmt, meta=None):
     tmp = out_path + ".part." + fmt                  # (ffmpeg picks the format by extension)
     fade = max(0.0, min(fade, dur / 3.0))
     af = f"afade=t=in:st=0:d={fade:.3f},afade=t=out:st={max(0.0, dur - fade):.3f}:d={fade:.3f}"
     codec = (["-c:a", "pcm_s24le"] if fmt == "wav" else
              ["-c:a", "libmp3lame", "-b:a", MP3_BITRATE])
+    tags = []
+    for k, v in (meta or {}).items():
+        if v not in (None, ""):
+            tags += ["-metadata", f"{k}={v}"]
     cmd = [ffmpeg, "-y", "-v", "error", "-ss", f"{start:.3f}", "-t", f"{dur:.3f}", "-i", source,
-           "-af", af] + codec + [tmp]
+           "-af", af, "-map_metadata", "-1"] + codec + tags + [tmp]
     r = subprocess.run(cmd, capture_output=True, text=True)
     if r.returncode != 0 or not os.path.exists(tmp):
         try:
@@ -84,10 +88,11 @@ def _render(ffmpeg, source, start, dur, fade, out_path, fmt):
 
 
 def export(source, songs, out_dir, *, fade_s=FADE_S, formats=FORMATS, ffmpeg=None, progress=None,
-           force=False):
+           force=False, artist=None, album=None):
     """Render each song [start, end] (seconds into `source`) into `out_dir`. Returns
     {"ok", "dir", "written": [file...], "kept": [file...], "removed": [file...], "errors": [msg...]}.
-    `progress(i, n, title)` is called before each song. Deterministic file names; songs with no
+    `progress(i, n, title)` is called before each song. `artist` / `album` (band, show) tag the
+    files along with each song's title and track number. Deterministic file names; songs with no
     window or a window past the recording's start are reported, not guessed."""
     res = {"ok": False, "dir": out_dir, "written": [], "kept": [], "removed": [], "errors": []}
     ffmpeg = ffmpeg or find_ffmpeg()
@@ -113,8 +118,8 @@ def export(source, songs, out_dir, *, fade_s=FADE_S, formats=FORMATS, ffmpeg=Non
             continue
         stem = stem_for(s, i)
         new[stem] = {"start": round(a, 3), "end": round(b, 3), "source": src_sig,
-                     "formats": sorted(formats)}
-        todo.append((stem, a, b, s.get("name") or stem))
+                     "formats": sorted(formats), "tags": [artist or "", album or ""]}
+        todo.append((stem, a, b, s.get("name") or stem, int(stem[:2]) if stem[:2].isdigit() else i + 1))
     # files of songs that are gone (renamed / removed) — only ones this exporter wrote
     for stem, meta in old.items():
         if stem not in new:
@@ -124,7 +129,7 @@ def export(source, songs, out_dir, *, fade_s=FADE_S, formats=FORMATS, ffmpeg=Non
                     os.remove(p)
                     res["removed"].append(os.path.basename(p))
     done = {k: v for k, v in old.items() if k in new}
-    for i, (stem, a, b, title) in enumerate(todo):
+    for i, (stem, a, b, title, track) in enumerate(todo):
         if progress:
             progress(i, len(todo), title)
         files = [os.path.join(out_dir, f"{stem}.{fmt}") for fmt in formats]
@@ -134,7 +139,8 @@ def export(source, songs, out_dir, *, fade_s=FADE_S, formats=FORMATS, ffmpeg=Non
             continue
         bad = None
         for fmt, p in zip(formats, files):
-            bad = _render(ffmpeg, source, a, b - a, fade_s, p, fmt)
+            bad = _render(ffmpeg, source, a, b - a, fade_s, p, fmt,
+                          {"title": title, "track": track, "artist": artist, "album": album})
             if bad:
                 res["errors"].append(f"{title}: {bad}")
                 break
