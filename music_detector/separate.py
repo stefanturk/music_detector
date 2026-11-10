@@ -112,6 +112,49 @@ def is_current(source, start, end, out_dir, model=MODEL):
             all(os.path.exists(os.path.join(out_dir, f)) for f in man.get("files") or ["-"]))
 
 
+ENDING_ROOM_S = 8.0     # what the ending detector needs past the song's end
+
+
+def covers(man):
+    """[a, b]: the stretch of the recording (seconds) the saved parts hold, or None."""
+    c = man.get("covers")
+    if isinstance(c, list) and len(c) == 2:
+        return float(c[0]), float(c[1])
+    w = (man.get("sig") or {}).get("window")
+    if isinstance(w, list) and len(w) == 2:
+        return float(w[0]) - float(man.get("pad_s", 0.0)), float(w[1]) + PAD_AFTER_S
+    return None
+
+
+def reuse_inside(source, start, end, out_dir, model=MODEL):
+    """A song whose start/end moved INSIDE what was already split keeps its parts: the manifest is
+    re-pointed at the new window (pad_s = how far into the files the song now starts), nothing is
+    re-split. Returns the updated manifest, or None when the parts don't cover the new window."""
+    man = read_manifest(out_dir)
+    if not man.get("files") or not all(os.path.exists(os.path.join(out_dir, f)) for f in man["files"]):
+        return None
+    try:
+        sig = _sig(source, start, end, model)
+    except OSError:
+        return None
+    old = man.get("sig") or {}
+    if old.get("source") != sig["source"] or old.get("model") != model \
+            or old.get("version") != VERSION:
+        return None
+    cv = covers(man)
+    if cv is None:
+        return None
+    a, b = cv
+    if float(start) < a - 1e-3 or float(end) + ENDING_ROOM_S > b + 1e-3 or float(end) <= float(start):
+        return None
+    man = dict(man, sig=sig, pad_s=round(float(start) - a, 3), covers=[round(a, 3), round(b, 3)])
+    mp = os.path.join(out_dir, MARKER)
+    with open(mp + ".tmp", "w", encoding="utf-8") as f:
+        json.dump(man, f, indent=1, sort_keys=True)
+    os.replace(mp + ".tmp", mp)
+    return man
+
+
 def run_demucs(py, wav, out_dir, model, *, two_stems=None, progress=None, cancel=None):
     """Run demucs on `wav`; returns the folder holding its <source>.wav files."""
     cmd = [py, "-m", "demucs", "-n", model, "-d", "cpu", "--shifts", "0", "-o", out_dir]
@@ -181,6 +224,11 @@ def split_song(source, start, end, out_dir, *, model=MODEL, progress=None, cance
         man = read_manifest(out_dir)
         res.update(ok=True, files=man["files"], pad_s=man.get("pad_s", 0.0), kept=True)
         return res
+    if not force:
+        kept = reuse_inside(source, start, end, out_dir, model)
+        if kept is not None:
+            res.update(ok=True, files=kept["files"], pad_s=kept["pad_s"], kept=True)
+            return res
     py = python or find_python()
     if not py:
         res["error"] = "the splitter (demucs) isn't installed"
@@ -213,7 +261,7 @@ def split_song(source, start, end, out_dir, *, model=MODEL, progress=None, cance
             res["error"] = "the splitter wrote no parts"
             return res
         man = {"sig": _sig(source, start, end, model), "files": files, "pad_s": pad,
-               "rate": RATE}
+               "rate": RATE, "covers": [round(a, 3), round(b, 3)]}
         mp = os.path.join(out_dir, MARKER)
         with open(mp + ".tmp", "w", encoding="utf-8") as f:
             json.dump(man, f, indent=1, sort_keys=True)

@@ -84,9 +84,11 @@ def test_same_inputs_skip_and_changed_window_reruns(tmp_path, fake_py):
     assert again["ok"] and again["kept"]
     calls = (tmp_path / "calls.txt").read_text().split()
     assert calls == [SEP.MODEL]
-    moved = SEP.split_song(str(src), 2.5, 8.0, str(out), python=fake_py)
+    inside = SEP.split_song(str(src), 2.5, 8.0, str(out), python=fake_py)   # inside: kept
+    assert inside["ok"] and inside["kept"]
+    moved = SEP.split_song(str(src), 0.5, 8.0, str(out), python=fake_py)    # earlier than split
     assert moved["ok"] and not moved["kept"]
-    assert json.load(open(out / SEP.MARKER))["sig"]["window"] == [2.5, 8.0]
+    assert json.load(open(out / SEP.MARKER))["sig"]["window"] == [0.5, 8.0]
 
 
 def test_missing_demucs_or_source_is_reported(tmp_path, monkeypatch):
@@ -133,3 +135,18 @@ def test_analyze_parts_reads_the_song_window(tmp_path):
     assert tl["stem_offset_s"] == 1.0 and tl["song_len_s"] == 10.0
     assert tl["truenorth_offset_s"] == 100.0
     assert any(sp["lead"] == "VOCAL" for sp in tl["spans"])
+
+
+def test_a_window_moved_inside_the_split_keeps_the_parts(tmp_path, fake_py):
+    src = tmp_path / "show.wav"
+    subprocess.run([FF, "-y", "-v", "error", "-f", "lavfi", "-i", "sine=f=220:d=60", str(src)], check=True)
+    out = tmp_path / "parts"
+    r = SEP.split_song(str(src), 10.0, 40.0, str(out), python=fake_py)
+    assert r["ok"] and not r["kept"]
+    calls = (tmp_path / "calls.txt").read_text().count("\n")
+    r2 = SEP.split_song(str(src), 15.0, 38.0, str(out), python=fake_py)    # trimmed both ends
+    assert r2["ok"] and r2["kept"] and r2["pad_s"] == 6.0
+    assert (tmp_path / "calls.txt").read_text().count("\n") == calls       # no new split
+    assert SEP.is_current(str(src), 15.0, 38.0, str(out))
+    r3 = SEP.split_song(str(src), 5.0, 38.0, str(out), python=fake_py)      # starts earlier: re-split
+    assert r3["ok"] and not r3["kept"]
