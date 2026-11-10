@@ -20,6 +20,8 @@ Result schema (schema 1; times in song seconds):
   entrances: [{voice, at}]
   singers:   [{start, end, stem, player}]         one per lyric line (VOCAL mics)
   best:      {VOICE: [{start, end, score, player}]}
+  ending:    {last_hit, ring_end, confidence}      the last chord and where its ring dies
+Every output is read by Movie Maker (flow.py / engine.py); the table is in the README.
 """
 import os
 import re

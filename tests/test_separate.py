@@ -2,6 +2,7 @@
 script that writes the six source WAVs, so these run without torch."""
 import json
 import os
+import shlex
 import subprocess
 import sys
 
@@ -34,7 +35,7 @@ def fake_py(tmp_path, monkeypatch):
     script = tmp_path / "fake_demucs.py"
     script.write_text(f"FF = {FF!r}\nCALLS = {str(tmp_path / 'calls.txt')!r}\n" + FAKE)
     py = tmp_path / "py"
-    py.write_text(f"#!/bin/sh\nshift 2\nexec {sys.executable} {script} \"$@\"\n")
+    py.write_text(f"#!/bin/sh\nshift 2\nexec {shlex.quote(sys.executable)} {shlex.quote(str(script))} \"$@\"\n")
     py.chmod(0o755)
     return str(py)
 

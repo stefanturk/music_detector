@@ -15,6 +15,26 @@ Install editable into the app's Python: `pip install -e ../music_detector` (nump
   `summary()` prints it.
 - Tests: `python3 -m pytest tests` (synthetic stems, one per detector).
 
+### What `detect()` says, and who reads it (movie_maker, `fcpkit/flow.py` + `engine.py`)
+A "voice" is an instrument group (VOCAL, DRUMS, GUITAR, KEYS, SAX...). Levels are relative to that
+voice's own loud level across the show, so 0..1 means "loud for that instrument", not absolute.
+
+| output | meaning | used by Movie Maker for |
+|---|---|---|
+| `energy` | whole-band intensity per 0.5 s | shot length (calm = long, intense = short) |
+| `featured` | per voice, how much it stands out vs its own usual share | who gets a free shot |
+| `playing` | per voice, on/off spans | "who is present" in free shots; Focus timeline |
+| `entrances` | a voice starting after a long silence | the punch-in: the next shot goes to them |
+| `trading` | two voices alternating | free shots only show the pair, cutting between them |
+| `fills` | drum fills (strength, confidence) | strong ones cut to the drummer |
+| `solos` | one voice out front, nobody singing | the soloist leads |
+| `best` | each voice's best stretches | each player gets a feature shot |
+| `singers` | which vocal mic sings each lyric line | the singer's shots |
+| `ending` | the last chord and its ring-out | where the movie ends |
+
+Stefan's corrections (`detect_edits_*.json`) cover fills / solos / best / ending. Without a detector
+file Movie Maker falls back to its older span levels.
+
 Live mode (streaming the same detectors, for stage_lighting) is not built yet.
 
 ## Finding songs (`music_detector.split`)
