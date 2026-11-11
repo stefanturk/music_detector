@@ -10,7 +10,7 @@ lines in song seconds (optional: without them, singing = the VOCAL voice playing
 song's who's-playing spans (optional, for trading sections).
 
 Result schema (schema 1; times in song seconds):
-  song, schema, hop_s, bin_s, stem_offset_s, song_len_s, voices: [VOICE...]
+  song, schema, version, hop_s, bin_s, stem_offset_s, song_len_s, voices: [VOICE...]
   energy:    [0..1 per bin]                       whole-band intensity
   featured:  {VOICE: [0..1 per bin]}              stands out vs its own usual share and level
   playing:   {VOICE: [[start, end], ...]}
@@ -32,7 +32,8 @@ from music_detector.core import detectors as D
 from music_detector.core import whoplays as W
 
 SCHEMA = 1
-VERSION = 2              # 2: + ending (the last chord's ring-out)
+VERSION = 3              # 2: + ending (the last chord's ring-out); 3: solos judged on each
+                         # player's own usual level and sound (lead_sound)
 _TOM = re.compile(r"\b(tom|toms|floor)\b", re.I)
 _KS = re.compile(r"\b(kick|kik|bd|snare|snr|sd)\b", re.I)
 
@@ -76,11 +77,48 @@ def _mic_act(files, cache_dir, stem_dir, lag, n):
     return out
 
 
+def lead_sound(stem_offset_s, song_len_s, cache_dir, *, stem_dir, voices, ffmpeg=None):
+    """{voice: timbre.measure(...)} of each melodic voice's loudest stem over the song (BIN_S bins):
+    how clear a single pitch it plays and how much it bends, for the own-usual solo rule. Voices
+    whose audio can't be read are left out; None when nothing can be read (no ffmpeg)."""
+    from music_detector.core import eq as _eq
+    from music_detector.core import timbre as T
+    ffmpeg = ffmpeg or os.environ.get("MUSIC_DETECTOR_FFMPEG", "/opt/homebrew/bin/ffmpeg")
+    if not os.path.exists(ffmpeg):
+        return None
+    lag = max(0, int(round(stem_offset_s / W.HOP)))
+    n = max(1, int(round(song_len_s / W.HOP)))
+    nb = int(np.ceil(song_len_s / D.BIN_S))
+    out = {}
+    for v, files in (voices or {}).items():
+        if v in D.RHYTHM or v == "VOCAL" or not files:
+            continue
+        try:
+            loud = []
+            for f in files:
+                seg = W.stem_env(os.path.join(stem_dir, f), cache_dir)[lag:lag + n]
+                loud.append((float(np.percentile(seg, 90)) if len(seg) else 0.0, f))
+            best = max(loud)[1]
+            x = _eq._decode(os.path.join(stem_dir, best), stem_offset_s, song_len_s, ffmpeg,
+                            rate=T.RATE)
+            if x is None or not len(x):
+                continue
+            m = T.measure(x, n_bins=nb)
+        except Exception:
+            continue
+        out[v] = {k: m[k] for k in ("clarity", "vibrato", "playing")}
+    return out or None
+
+
 def detect(stem_offset_s, song_len_s, cache_dir, *, stem_dir, voices, player=None, lines=None,
-           spans=None, song=None, bleed_guard=False):
+           spans=None, song=None, bleed_guard=False, lead=True):
+    """`lead`: True measures each melodic part's sound for the own-usual solo rule (lead_sound),
+    False skips it (the loudness rule alone), or a ready {voice: measurements} dict."""
     player = player or {}
     act, lag, n, voice_full = activity(stem_offset_s, song_len_s, cache_dir, stem_dir=stem_dir,
                                        voices=voices, bleed_guard=bleed_guard)
+    if lead is True:
+        lead = lead_sound(stem_offset_s, song_len_s, cache_dir, stem_dir=stem_dir, voices=voices)
     playing = {v: D.playing_mask(a) for v, a in act.items()}
     sing = D.singing_mask(n, lines, act.get("VOCAL"))
     # a voice's player, when all its stems name the same person (SAX: Drew; VOCAL: several -> None)
@@ -104,7 +142,7 @@ def detect(stem_offset_s, song_len_s, cache_dir, *, stem_dir, voices, player=Non
     singers = (D.line_singers(lines, _mic_act(vox, cache_dir, stem_dir, lag, n), player)
                if lines and vox else [])
     return {
-        "song": song, "schema": SCHEMA, "hop_s": D.HOP, "bin_s": D.BIN_S,
+        "song": song, "schema": SCHEMA, "version": VERSION, "hop_s": D.HOP, "bin_s": D.BIN_S,
         "stem_offset_s": round(float(stem_offset_s), 2), "song_len_s": round(float(song_len_s), 2),
         "voices": sorted(act),
         "energy": [round(float(x), 3) for x in D.energy_curve(act)],
@@ -112,7 +150,7 @@ def detect(stem_offset_s, song_len_s, cache_dir, *, stem_dir, voices, player=Non
         "playing": {v: [[D._sec(a), D._sec(b)] for a, b in D.runs(m)]
                     for v, m in sorted(playing.items())},
         "fills": fills,
-        "solos": D.solos(act, playing, sing, player_of),
+        "solos": D.solos(act, playing, sing, player_of, lead=lead or None, featured=feat),
         "trading": D.trading(spans),
         "entrances": D.entrances(act, playing),
         "singers": singers,

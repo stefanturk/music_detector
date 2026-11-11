@@ -46,6 +46,17 @@ SOLO_MIN_S = 4.0          # a solo lasts at least this long
 SOLO_DOM = 1.3            # the soloist is at least this many times louder than the next voice
 SOLO_GAP_S = 0.75         # short dips inside a solo are bridged
 RHYTHM = ("DRUMS", "BASS")
+# ...and judged on each player's OWN usual (with the part's sound, timbre.measure):
+SOLO_SMOOTH_S = 4.0       # level / featured / sound are averaged over this long
+SOLO_OWN_UP = 1.2         # up on the player's own usual level (median while playing in the song)
+SOLO_FEAT_MIN = 0.35      # ...or the most featured part: at least this featured...
+SOLO_FEAT_LEAD = 1.4      # ...and this many times the next part's featured score
+SOLO_CLAR_UP = 0.15       # a lead line: a clearer single pitch than the part's own usual by this...
+SOLO_VIB = 0.15           # ...or this share of held notes bent / with vibrato
+SOLO_STRONG_CLAR = 0.25   # a strong lead sound (this much clearer AND bends) counts at usual level...
+SOLO_SOUND_ONLY_S = 8.0   # ...when it lasts this long
+SOLO_LEAD_GAP_S = 2.5     # another player's answering phrase inside a solo doesn't end it
+SOLO_LEAD_MIN_S = 6.0     # an own-usual solo lasts at least this long
 
 # entrances
 ENTRANCE_OFF_S = 3.0      # a voice "enters" when it starts after at least this long off
@@ -249,12 +260,108 @@ def singing_mask(n, lines=None, vocal_act=None, hop=HOP):
     return m
 
 
-def solos(act, playing, singing, player_of=None, hop=HOP):
+def _lead_solos(act, playing, singing, lead, featured, hop=HOP, bin_s=BIN_S):
+    """{voice: [(start_frame, end_frame, confidence)]}: melodic solos judged against each player's
+    OWN usual, not against the other players' loudness (Stefan, Sure Dont Miss Me: his guitar solo
+    broke up because Chris's keys comping was as loud). A half-second bin is a solo bin when nobody
+    sings, the part sounds like a lead line (a clearer single pitch than its own usual, or bends /
+    vibrato) AND it is up on its own usual level or the clearly most featured part. A long stretch
+    of a strong lead sound counts at its usual level. Where two parts claim a bin, the more featured
+    one keeps it."""
+    k = max(1, int(round(bin_s / hop)))
+    nb = min([len(f) for f in featured.values()] + [len(singing) // k])
+    sm = lambda x: _smooth(np.asarray(x, dtype=float)[:nb], max(1, int(round(SOLO_SMOOTH_S / bin_s))))
+    sing_b = _bins(np.asarray(singing, dtype=float), hop, bin_s)[:nb] > 0.3
+    fs = {v: sm(f) for v, f in featured.items()}
+    claim, conf_b = {}, {}
+    for v, t in (lead or {}).items():
+        if v in RHYTHM or v == "VOCAL" or v not in act or v not in fs:
+            continue
+        lvl = _bins(np.asarray(act[v], dtype=float), hop, bin_s)[:nb]
+        pl = _bins(playing[v].astype(float), hop, bin_s)[:nb] > 0.5
+        clar = np.asarray(t.get("clarity", []), dtype=float)[:nb]
+        vib = np.asarray(t.get("vibrato", []), dtype=float)[:nb]
+        tp = np.asarray(t.get("playing", []), dtype=float)[:nb] > 0.2
+        if pl.sum() < 10 or len(clar) < nb or len(vib) < nb or not tp.any():
+            continue
+        own = sm(lvl) / (np.median(lvl[pl]) + 1e-9)
+        others = [fs[o] for o in fs if o not in (v, "VOCAL")]
+        top = np.max(others, axis=0) if others else np.zeros(nb)
+        flead = (fs[v] >= SOLO_FEAT_MIN) & (fs[v] >= SOLO_FEAT_LEAD * top)
+        margin = sm(clar) - float(np.median(clar[tp]))
+        vs = sm(vib)
+        sound = (margin >= SOLO_CLAR_UP) | (vs >= SOLO_VIB)
+        base = pl & ~sing_b
+        m = base & sound & ((own >= SOLO_OWN_UP) | flead)
+        strong = base & (margin >= SOLO_STRONG_CLAR) & (vs >= SOLO_VIB)
+        for a, b in runs(strong, gap=int(round(SOLO_LEAD_GAP_S / bin_s)),
+                         min_len=int(round(SOLO_SOUND_ONLY_S / bin_s))):
+            m[a:b] = True
+        claim[v] = m
+        conf_b[v] = np.clip(0.3 + 0.35 * np.clip((own - 1.0) / 0.5, 0, 1)
+                            + 0.35 * np.clip(np.maximum(margin / 0.3, vs / 0.4), 0, 1), 0, 1)
+    if len(claim) > 1:                       # one soloist per bin: the most featured part keeps it
+        vs_ = sorted(claim)
+        stack = np.array([np.where(claim[v], fs[v], -1.0) for v in vs_])
+        win = np.argmax(stack, axis=0)
+        for i, v in enumerate(vs_):
+            claim[v] = claim[v] & (win == i)
+    out = {}
+    for v, m in claim.items():
+        for a, b in runs(m, gap=int(round(SOLO_LEAD_GAP_S / bin_s)),
+                         min_len=int(round(SOLO_LEAD_MIN_S / bin_s))):
+            out.setdefault(v, []).append((a * k, b * k, round(float(np.mean(conf_b[v][a:b])), 2)))
+    return out
+
+
+def solos(act, playing, singing, player_of=None, hop=HOP, lead=None, featured=None):
     """[{voice, player, start, end, confidence}]: one voice clearly out front for >= SOLO_MIN_S while
     nobody sings. A melodic voice must beat every other melodic voice by SOLO_DOM; the drums or bass
-    need everyone else (melodic) under PLAY_OFF."""
+    need everyone else (melodic) under PLAY_OFF.
+
+    `lead` = {voice: timbre.measure(...) of its loudest stem} (per BIN_S bin) adds the own-usual
+    rule (_lead_solos): those solos join and extend the loudness ones, and a loudness-only solo
+    lying mostly inside another part's lead solo is dropped."""
     voices = [v for v in act if v != "VOCAL"]
     n = len(singing)
+    if lead:
+        if featured is None:
+            featured = featured_scores(act, playing, hop)
+        ls = _lead_solos(act, playing, singing, lead, featured, hop)
+        old = solos(act, playing, singing, None, hop)
+        merged = []
+        for v in voices:
+            mask = np.zeros(n, dtype=bool)
+            conf = np.zeros(n)
+            for a, b, c in ls.get(v, []):
+                mask[a:b] = True
+                conf[a:b] = np.maximum(conf[a:b], c)
+            for s in old:
+                if s["voice"] != v:
+                    continue
+                a, b = int(round(s["start"] / hop)), int(round(s["end"] / hop))
+                inside = sum(max(0, min(b, y) - max(a, x)) for o, segs in ls.items() if o != v
+                             for x, y, _ in segs)
+                if inside > 0.5 * (b - a):
+                    continue                 # another player's solo, really
+                mask[a:b] = True
+                conf[a:b] = np.maximum(conf[a:b], s["confidence"])
+            for a, b in runs(mask):
+                merged.append((a, b, v, round(float(np.max(conf[a:b])), 2)))
+        # one soloist at a time: the longer solo keeps an overlap, the other is trimmed around it
+        kept = []
+        for a, b, v, c in sorted(merged, key=lambda s: (-(s[1] - s[0]), s[0], s[2])):
+            pieces = [(a, b)]
+            for x, y, w, _ in kept:
+                if w == v:
+                    continue
+                pieces = [p for s0, e0 in pieces
+                          for p in ((s0, min(e0, x)), (max(s0, y), e0)) if p[1] > p[0]]
+            kept += [(s0, e0, v, c) for s0, e0 in pieces
+                     if (e0 - s0) * hop >= SOLO_MIN_S - 1e-9]
+        return sorted(({"voice": v, "player": (player_of or {}).get(v), "start": _sec(a, hop),
+                        "end": _sec(b, hop), "confidence": c} for a, b, v, c in kept),
+                      key=lambda s: (s["start"], s["voice"]))
     out = []
     for v in voices:
         me = np.asarray(act[v], dtype=float)[:n]

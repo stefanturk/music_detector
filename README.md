@@ -27,7 +27,7 @@ voice's own loud level across the show, so 0..1 means "loud for that instrument"
 | `entrances` | a voice starting after a long silence | the punch-in: the next shot goes to them |
 | `trading` | two voices alternating | free shots only show the pair, cutting between them |
 | `fills` | drum fills (strength, confidence) | strong ones cut to the drummer |
-| `solos` | one voice out front, nobody singing | the soloist leads |
+| `solos` | one voice out front, nobody singing: louder than everyone, or (v3) up on the player's OWN usual level with a lead-line sound (one clear note at a time, bends) | the soloist leads, like a singer: back to them after cutaways, split screens with them as A |
 | `best` | each voice's best stretches | each player gets a feature shot |
 | `singers` | which vocal mic sings each lyric line | the singer's shots |
 | `ending` | the last chord and its ring-out | where the movie ends |

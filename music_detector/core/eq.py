@@ -25,15 +25,15 @@ REST_PCT = 20
 NOT_BAND = re.compile(r"\b(TOM|TOMS)\b", re.I)
 
 
-def _decode(path, start, dur, ffmpeg):
+def _decode(path, start, dur, ffmpeg, rate=RATE):
     p = subprocess.run([ffmpeg, "-v", "error", "-ss", f"{max(0.0, start):.3f}", "-t", f"{dur:.3f}",
-                        "-i", path, "-ac", "1", "-ar", str(RATE), "-f", "f32le", "-"],
+                        "-i", path, "-ac", "1", "-ar", str(rate), "-f", "f32le", "-"],
                        capture_output=True)
     if p.returncode != 0:
         return None
     x = np.frombuffer(p.stdout, dtype="<f4").astype(np.float64)
     if start < 0:
-        x = np.concatenate([np.zeros(int(-start * RATE)), x])
+        x = np.concatenate([np.zeros(int(-start * rate)), x])
     return x
 
 

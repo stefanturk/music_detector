@@ -174,3 +174,62 @@ def test_the_last_chord_must_start_inside_the_song():
     b = np.concatenate([_ring(3.0, 1.0), steady(1.0, 0.0005), steady(3.0, 1.0), steady(1.0, 0.0005)])
     e = D.ending(b, song_n=frames(31.0))
     assert e is None or e["last_hit"] <= 31.5
+
+
+# ---- solos judged on each player's own usual level and sound (lead=) ----
+def _bins_of(sec_total, parts, default):
+    """Per-BIN_S array: `default`, with `parts` [(a_s, b_s, value)] laid over it."""
+    nb = int(round(sec_total / D.BIN_S))
+    x = np.full(nb, float(default))
+    for a, b, v in parts:
+        x[int(a / D.BIN_S):int(b / D.BIN_S)] = v
+    return x
+
+
+def _band(gtr_up=True, keys_up=False):
+    """60 s: the guitar sits at 0.5 and plays a lead line from 20 to 45 s; the keys comp at 0.7
+    (louder than the guitar all along) with an answering phrase at 30-31.5 s."""
+    gtr = np.concatenate([steady(20, 0.5), steady(25, 0.65 if gtr_up else 0.5), steady(15, 0.5)])
+    keys = np.concatenate([steady(20, 0.7), steady(10, 0.9 if keys_up else 0.7),
+                           steady(1.5, 1.0), steady(13.5, 0.9 if keys_up else 0.7), steady(15, 0.7)])
+    act = {"GUITAR": gtr, "KEYS": keys, "DRUMS": steady(60, 1.0), "BASS": steady(60, 1.0),
+           "VOCAL": steady(60, 0.0)}
+    lead = {"GUITAR": {"clarity": _bins_of(60, [(20, 45, 0.92)], 0.6),
+                       "vibrato": _bins_of(60, [(20, 45, 0.3)], 0.0),
+                       "playing": _bins_of(60, [], 1.0)},
+            "KEYS": {"clarity": _bins_of(60, [], 0.85), "vibrato": _bins_of(60, [], 0.0),
+                     "playing": _bins_of(60, [], 1.0)}}
+    playing = {v: D.playing_mask(a) for v, a in act.items()}
+    sing = D.singing_mask(frames(60), lines=[(1.0, 18.0), (47.0, 59.0)])
+    return act, playing, sing, lead
+
+
+def test_a_lead_line_up_on_its_own_usual_is_a_solo_over_louder_comping():
+    act, playing, sing, lead = _band()
+    assert not [s for s in D.solos(act, playing, sing) if s["voice"] == "GUITAR"]   # loudness alone
+    sol = D.solos(act, playing, sing, {"GUITAR": "Stefan"}, lead=lead)
+    g = [s for s in sol if s["voice"] == "GUITAR"]
+    assert len(g) == 1 and g[0]["player"] == "Stefan" and g[0]["confidence"] >= 0.3
+    assert g[0]["start"] <= 21.5 and g[0]["end"] >= 43.5        # the keys' answer doesn't end it
+    assert not [s for s in sol if s["voice"] == "KEYS"]
+
+
+def test_louder_chords_are_not_a_solo():
+    act, playing, sing, lead = _band(gtr_up=False, keys_up=True)
+    act["GUITAR"] = act["GUITAR"] + 0.25          # the guitar comps along, so loudness alone is quiet
+    playing = {v: D.playing_mask(a) for v, a in act.items()}
+    assert not [s for s in D.solos(act, playing, sing) if s["voice"] in ("KEYS", "GUITAR")]
+    lead["GUITAR"] = {"clarity": _bins_of(60, [], 0.6), "vibrato": _bins_of(60, [], 0.0),
+                      "playing": _bins_of(60, [], 1.0)}
+    sol = D.solos(act, playing, sing, lead=lead)
+    assert not [s for s in sol if s["voice"] in ("KEYS", "GUITAR")]
+
+
+def test_a_lead_line_under_singing_is_not_a_solo():
+    act, playing, _sing, lead = _band()
+    assert D.solos(act, playing, np.ones(frames(60), dtype=bool), lead=lead) == []
+
+
+def test_without_the_sound_the_loudness_rule_is_unchanged():
+    act, playing, sing, _lead = _band()
+    assert D.solos(act, playing, sing, lead=None) == D.solos(act, playing, sing)
