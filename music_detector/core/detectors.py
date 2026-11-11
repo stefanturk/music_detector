@@ -405,20 +405,37 @@ def entrances(act, playing, hop=HOP):
     return sorted(out, key=lambda e: (e["at"], e["voice"]))
 
 
+# A line sung TOGETHER (a group chant): another mic is singing (activity >= CHANT_ON, on its own
+# scale) through CHANT_FRAC of the line, and is at least CHANT_REL as loud as the loudest one
+# (so a neighbour's bleed into a mic never counts).
+CHANT_ON = 0.3
+CHANT_FRAC = 0.6
+CHANT_REL = 0.45
+
+
 def line_singers(lines, mic_act, mic_player=None, hop=HOP):
     """For each lyric line (song seconds), the vocal mic that is loudest over it (each mic judged on
-    its own scale) -> [{start, end, stem, player}]. `mic_act` = {stem: activity}."""
+    its own scale) -> [{start, end, stem, player, with}]. `mic_act` = {stem: activity}. `with` lists
+    the other mics singing the same line with it (a group chant), loudest first; [] for a solo line."""
     out = []
     for s, e in lines or []:
         a, b = max(0, int(s / hop)), max(1, int(np.ceil(e / hop)))
-        best, best_v = None, -1.0
+        vals = {}
         for stem in sorted(mic_act):
             x = np.asarray(mic_act[stem], dtype=float)[a:b]
-            val = float(np.mean(x)) if len(x) else 0.0
-            if val > best_v:
-                best, best_v = stem, val
+            vals[stem] = (float(np.mean(x)) if len(x) else 0.0,
+                          float(np.mean(x >= CHANT_ON)) if len(x) else 0.0)
+        best, best_v = None, -1.0
+        for stem in sorted(vals):
+            if vals[stem][0] > best_v:
+                best, best_v = stem, vals[stem][0]
+        together = []
+        if best is not None and vals[best][1] >= CHANT_FRAC:
+            together = sorted((st for st, (m, on) in vals.items() if st != best
+                               and on >= CHANT_FRAC and m >= CHANT_REL * best_v),
+                              key=lambda st: (-vals[st][0], st))
         out.append({"start": round(float(s), 2), "end": round(float(e), 2), "stem": best,
-                    "player": (mic_player or {}).get(best)})
+                    "player": (mic_player or {}).get(best), "with": together})
     return out
 
 

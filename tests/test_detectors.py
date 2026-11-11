@@ -102,6 +102,14 @@ def test_each_lyric_line_goes_to_the_loudest_mic():
                                                        ("13 VOX RIGHT.wav", None)]
 
 
+def test_a_line_sung_together_is_a_group_chant():
+    left = np.concatenate([steady(4, 1.0), steady(4, 1.0)])
+    right = np.concatenate([steady(4, 0.15), steady(4, 0.9)])       # bleed, then singing too
+    out = D.line_singers([(0.5, 3.5), (4.5, 7.5)], {"11 VOX LEFT.wav": left,
+                                                     "13 VOX RIGHT.wav": right})
+    assert out[0]["with"] == [] and out[1]["with"] == ["13 VOX RIGHT.wav"]
+
+
 def test_best_moments_find_the_featured_stretch():
     f = np.zeros(120)
     f[60:70] = 0.9
