@@ -68,8 +68,63 @@ def _smooth(x, win):
     return np.convolve(xp, kernel, mode="same")[pad:pad + len(x)]
 
 
+# A song only really ends after QUIET_S of quiet (Stefan 2026-11-10: "more like 10 seconds ... it
+# doesn't have to be completely silent, just way more silent than a band. People may still talk
+# into mics"). Quiet = below the song-start level (quiet_frac, same scale as hi_frac) once the level
+# is smoothed with a QUIET_MEDIAN_S running median, so talking and crowd bursts drop out. Two
+# windows with less quiet than that between them are one song with a quiet bit or a stop in it.
+QUIET_S = 8.0           # 10 s joined two real songs at Litty D Misco 4 (a 9 s pause); 8 s gets all
+                        # five shows with hand-fixed songs exactly right
+QUIET_FRAC = 0.40
+QUIET_MEDIAN_S = 3.0
+QUIET_EDGE_S = 10.0      # the quiet may begin in a song's fading tail / end in the next one's count-in
+MUSIC_DB = 8.0           # a piece whose typical level is this far under the band's (the show's 90th
+                         # percentile) is someone talking or tuning into a mic, not a song
+
+
+def _running_median(x, win):
+    win = max(1, int(win) | 1)
+    if win == 1 or len(x) < win:
+        return x.astype(np.float64)
+    from numpy.lib.stride_tricks import sliding_window_view
+    pad = win // 2
+    return np.median(sliding_window_view(np.pad(x.astype(np.float64), pad, mode="edge"), win), axis=1)
+
+
+def _longest_run(mask):
+    best = run = 0
+    for v in mask:
+        run = run + 1 if v else 0
+        best = max(best, run)
+    return best
+
+
+def _join_quiet_bits(segs, env_raw, thr_quiet, hop_s, quiet_s, band_db):
+    """Merge neighbouring segments unless the stretch between them has a run of >= quiet_s below
+    thr_quiet (on the running-median level)."""
+    if quiet_s <= 0 or len(segs) < 2:
+        return segs
+    med = _running_median(env_raw, round(QUIET_MEDIAN_S / hop_s))
+    need = int(round(quiet_s / hop_s))
+    edge = int(round(QUIET_EDGE_S / hop_s))
+    # a piece no louder than "quiet", or way under the band, is talk / tuning: it joins nothing
+    music = max(thr_quiet, band_db - MUSIC_DB)
+    segs = [(s, e) for s, e in segs if np.median(med[s:e + 1]) >= music] or segs
+    out = [segs[0]]
+    for s, e in segs[1:]:
+        ps, pe = out[-1]
+        a, b = max(ps, pe - edge), min(e, s + edge)
+        if _longest_run(med[a:b + 1] < thr_quiet) < need:
+            out[-1] = (ps, e)
+        else:
+            out.append((s, e))
+    # ...and the same after joining: bits of talk glued together are still talk
+    return [(s, e) for s, e in out if np.median(med[s:e + 1]) >= music] or out
+
+
 def detect_windows(rms, hop_s, smooth_s=1.5, min_gap_s=4.0, min_song_s=45.0,
-                   hi_frac=0.40, lo_frac=0.25, min_stop_s=1.0, stop_frac=0.10):
+                   hi_frac=0.40, lo_frac=0.25, min_stop_s=1.0, stop_frac=0.10,
+                   quiet_s=QUIET_S, quiet_frac=QUIET_FRAC):
     """Segment a loudness envelope into song windows.
 
     `rms`   : per-frame RMS values (any positive loudness curve).
@@ -84,6 +139,8 @@ def detect_windows(rms, hop_s, smooth_s=1.5, min_gap_s=4.0, min_song_s=45.0,
     hi/lo_frac : hysteresis thresholds as a fraction between the 10th and 90th
                  percentile of the smoothed loudness.
     stop_frac  : the deep-stop threshold as that same fraction (below lo_frac).
+    quiet_s    : a song only ends where there is at least this much quiet (see QUIET_S); 0 = off.
+    quiet_frac : "quiet" for that rule, as that same fraction.
 
     Returns (windows, thresholds) where each window is
       {index, start_s, end_s, dur_s, mean_db}
@@ -128,6 +185,7 @@ def detect_windows(rms, hop_s, smooth_s=1.5, min_gap_s=4.0, min_song_s=45.0,
                 in_song = False
     if in_song:
         segs.append((seg_start, len(env) - 1))
+    segs = _join_quiet_bits(segs, env_raw, floor + quiet_frac * span, hop_s, quiet_s, ceil)
 
     out = []
     for s, e in segs:
