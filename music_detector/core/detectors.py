@@ -407,17 +407,28 @@ def entrances(act, playing, hop=HOP):
 
 # A line sung TOGETHER (a group chant): another mic is singing (activity >= CHANT_ON, on its own
 # scale) through CHANT_FRAC of the line, and is at least CHANT_REL as loud as the loudest one
-# (so a neighbour's bleed into a mic never counts).
+# (so a neighbour's bleed into a mic never counts). With the mics' raw levels (`mic_raw`) it must
+# also be really sung INTO that mic (Stefan 2026-11-11: one singer belting showed up as a chant,
+# her bleed on the next mic): its raw level over the line within CHANT_OWN_DB of its own usual sung
+# level (its median over the lines it leads), or, for a mic that leads no line, within CHANT_PEER_DB
+# of the leading mic's raw level.
 CHANT_ON = 0.3
 CHANT_FRAC = 0.6
 CHANT_REL = 0.45
+CHANT_OWN_DB = 6.0
+CHANT_PEER_DB = 6.0
 
 
-def line_singers(lines, mic_act, mic_player=None, hop=HOP):
+def line_singers(lines, mic_act, mic_player=None, hop=HOP, mic_raw=None):
     """For each lyric line (song seconds), the vocal mic that is loudest over it (each mic judged on
     its own scale) -> [{start, end, stem, player, with}]. `mic_act` = {stem: activity}. `with` lists
-    the other mics singing the same line with it (a group chant), loudest first; [] for a solo line."""
-    out = []
+    the other mics singing the same line with it (a group chant), loudest first; [] for a solo line.
+    `mic_raw` = {stem: raw level} (optional): the bleed check above."""
+    def mean(arr, a, b):
+        x = np.asarray(arr, dtype=float)[a:b]
+        return float(np.mean(x)) if len(x) else 0.0
+
+    rows = []
     for s, e in lines or []:
         a, b = max(0, int(s / hop)), max(1, int(np.ceil(e / hop)))
         vals = {}
@@ -429,13 +440,38 @@ def line_singers(lines, mic_act, mic_player=None, hop=HOP):
         for stem in sorted(vals):
             if vals[stem][0] > best_v:
                 best, best_v = stem, vals[stem][0]
+        rows.append((s, e, a, b, vals, best, best_v))
+    own = {}
+    if mic_raw:
+        led = {}
+        for s, e, a, b, vals, best, _ in rows:
+            if best in mic_raw:
+                led.setdefault(best, []).append(mean(mic_raw[best], a, b))
+        own = {st: float(np.median(v)) for st, v in led.items() if v}
+    own_k, peer_k = 10 ** (-CHANT_OWN_DB / 20.0), 10 ** (-CHANT_PEER_DB / 20.0)
+
+    def sung_into(st, a, b, best):
+        if not mic_raw or st not in mic_raw:
+            return True
+        r = mean(mic_raw[st], a, b)
+        if st in own:
+            return r >= own[st] * own_k
+        return best in mic_raw and r >= mean(mic_raw[best], a, b) * peer_k
+
+    out = []
+    for s, e, a, b, vals, best, best_v in rows:
         together = []
         if best is not None and vals[best][1] >= CHANT_FRAC:
+            # with raw levels the bleed test is sung_into (on each mic's own scale a mostly-bleed
+            # mic always looks loud, so CHANT_REL would miss real duets next to it)
             together = sorted((st for st, (m, on) in vals.items() if st != best
-                               and on >= CHANT_FRAC and m >= CHANT_REL * best_v),
+                               and on >= CHANT_FRAC
+                               and (sung_into(st, a, b, best) if mic_raw and st in mic_raw
+                                    else m >= CHANT_REL * best_v)),
                               key=lambda st: (-vals[st][0], st))
         out.append({"start": round(float(s), 2), "end": round(float(e), 2), "stem": best,
-                    "player": (mic_player or {}).get(best), "with": together})
+                    "player": (mic_player or {}).get(best), "with": together,
+                    "bleed_checked": bool(mic_raw)})
     return out
 
 

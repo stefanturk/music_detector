@@ -32,7 +32,7 @@ from music_detector.core import detectors as D
 from music_detector.core import whoplays as W
 
 SCHEMA = 1
-VERSION = 3              # 2: + ending (the last chord's ring-out); 3: solos judged on each
+VERSION = 4              # 4: group chants checked for bleed (bleed_checked); 2: + ending (the last chord's ring-out); 3: solos judged on each
                          # player's own usual level and sound (lead_sound)
 _TOM = re.compile(r"\b(tom|toms|floor)\b", re.I)
 _KS = re.compile(r"\b(kick|kik|bd|snare|snr|sd)\b", re.I)
@@ -69,11 +69,16 @@ def _sum_stems(files, cache_dir, stem_dir, lag, n):
     return _window(W._energy_sum(files, cache_dir, stem_dir), lag, n)
 
 
-def _mic_act(files, cache_dir, stem_dir, lag, n):
+def _mic_act(files, cache_dir, stem_dir, lag, n, raw=None):
+    """{file: activity} of each vocal mic (its level on its own scale); `raw` (a dict) also gets
+    each mic's raw level over the song, for the chant bleed check."""
     out = {}
     for f in files:
         e = W.stem_env(os.path.join(stem_dir, f), cache_dir)
-        out[f] = _window(e, lag, n) / (np.percentile(e, W.PCT_HI) + 1e-9)
+        w = _window(e, lag, n)
+        out[f] = w / (np.percentile(e, W.PCT_HI) + 1e-9)
+        if raw is not None:
+            raw[f] = w
     return out
 
 
@@ -139,7 +144,9 @@ def detect(stem_offset_s, song_len_s, cache_dir, *, stem_dir, voices, player=Non
 
     feat = D.featured_scores(act, playing)
     vox = voices.get("VOCAL", [])
-    singers = (D.line_singers(lines, _mic_act(vox, cache_dir, stem_dir, lag, n), player)
+    raw = {}
+    singers = (D.line_singers(lines, _mic_act(vox, cache_dir, stem_dir, lag, n, raw), player,
+                              mic_raw=raw)
                if lines and vox else [])
     return {
         "song": song, "schema": SCHEMA, "version": VERSION, "hop_s": D.HOP, "bin_s": D.BIN_S,
@@ -177,7 +184,9 @@ def line_singers(stem_offset_s, song_len_s, cache_dir, *, stem_dir, vocal_files,
         return []
     lag = max(0, int(round(stem_offset_s / W.HOP)))
     n = max(1, int(round(song_len_s / W.HOP)))
-    return D.line_singers(lines, _mic_act(vocal_files, cache_dir, stem_dir, lag, n), player or {})
+    raw = {}
+    act = _mic_act(vocal_files, cache_dir, stem_dir, lag, n, raw)
+    return D.line_singers(lines, act, player or {}, mic_raw=raw)
 
 
 def summary(res):

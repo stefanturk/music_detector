@@ -110,6 +110,25 @@ def test_a_line_sung_together_is_a_group_chant():
     assert out[0]["with"] == [] and out[1]["with"] == ["13 VOX RIGHT.wav"]
 
 
+def test_one_singer_belting_into_her_neighbours_mic_is_not_a_chant():
+    """Stefan 2026-11-11: lines in What is Hip came up as chants with one person singing loud.
+    The second mic only ever hears her bleed, so on its own scale it looks 'on'; its raw level
+    says nobody sings into it."""
+    lead = np.concatenate([steady(4, 1.0), steady(4, 1.0)])
+    bleed = np.concatenate([steady(4, 0.08), steady(4, 0.08)])        # all bleed, all song
+    act = {"11 VOX LEFT.wav": lead / 1.0, "13 VOX RIGHT.wav": bleed / 0.08}
+    lines = [(0.5, 3.5), (4.5, 7.5)]
+    assert D.line_singers(lines, act)[0]["with"] == ["13 VOX RIGHT.wav"]          # the old call
+    raw = {"11 VOX LEFT.wav": lead, "13 VOX RIGHT.wav": bleed}
+    out = D.line_singers(lines, act, mic_raw=raw)
+    assert [s["with"] for s in out] == [[], []] and out[0]["bleed_checked"]
+    two = np.concatenate([steady(4, 0.08), steady(4, 0.9)])           # then she really sings too
+    raw2 = {"11 VOX LEFT.wav": lead, "13 VOX RIGHT.wav": two}
+    out = D.line_singers(lines, {"11 VOX LEFT.wav": lead, "13 VOX RIGHT.wav": two / 0.9},
+                         mic_raw=raw2)
+    assert out[0]["with"] == [] and out[1]["with"] == ["13 VOX RIGHT.wav"]
+
+
 def test_best_moments_find_the_featured_stretch():
     f = np.zeros(120)
     f[60:70] = 0.9
