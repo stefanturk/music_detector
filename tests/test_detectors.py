@@ -260,3 +260,29 @@ def test_a_lead_line_under_singing_is_not_a_solo():
 def test_without_the_sound_the_loudness_rule_is_unchanged():
     act, playing, sing, _lead = _band()
     assert D.solos(act, playing, sing, lead=None) == D.solos(act, playing, sing)
+
+
+def _lines(n):
+    return [(i * 4 + 0.5, i * 4 + 3.5) for i in range(n)]
+
+
+def test_steady_loud_bleed_from_one_singer_is_never_a_chant():
+    """Stefan 2026-11-15, Beautiful Chicken: a mic between two singers hears whoever leads a few
+    dB under them on every line -- 100 of 103 lines came up as chants."""
+    lead = np.concatenate([steady(4, 1.0)] * 10)
+    side = np.concatenate([steady(4, 0.6)] * 10)                      # loud bleed, every line
+    act = {"11 VOX LEFT.wav": lead, "12 VOX CENTER.wav": side / 0.6}
+    out = D.line_singers(_lines(10), act, mic_raw={"11 VOX LEFT.wav": lead,
+                                                   "12 VOX CENTER.wav": side})
+    assert [s["stem"] for s in out] == ["11 VOX LEFT.wav"] * 10
+    assert all(s["with"] == [] for s in out)
+
+
+def test_a_mic_well_above_its_usual_bleed_is_singing_along():
+    lead = np.concatenate([steady(4, 1.0)] * 10)
+    lv = [0.08] * 8 + [0.25] * 2                                       # bleed, then she joins in
+    two = np.concatenate([steady(4, v) for v in lv])
+    act = {"11 VOX LEFT.wav": lead, "13 VOX RIGHT.wav": two / 0.25}
+    out = D.line_singers(_lines(10), act, mic_raw={"11 VOX LEFT.wav": lead,
+                                                   "13 VOX RIGHT.wav": two})
+    assert [bool(s["with"]) for s in out] == [False] * 8 + [True] * 2

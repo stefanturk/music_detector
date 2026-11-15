@@ -417,6 +417,16 @@ CHANT_FRAC = 0.6
 CHANT_REL = 0.45
 CHANT_OWN_DB = 6.0
 CHANT_PEER_DB = 6.0
+# Per mic pair (Stefan 2026-11-15, Beautiful Chicken: 100 of 103 lines came up as chants). A mic's
+# bleed from a given lead sits at a steady level under it; it only sings along when it's clearly
+# above that. With CHANT_PAIR_MIN+ lines led by that lead, the other mic's usual bleed is the
+# CHANT_BLEED_PCT percentile of (its level - the lead's) over them, and it counts only at
+# CHANT_OVER_DB above that. The own-usual rule needs CHANT_OWN_MIN lines led (2-3 flukes led by a
+# mic that mostly hears bleed made its "usual" a bleed level).
+CHANT_PAIR_MIN = 6
+CHANT_BLEED_PCT = 25
+CHANT_OVER_DB = 8.0
+CHANT_OWN_MIN = 5
 
 
 def line_singers(lines, mic_act, mic_player=None, hop=HOP, mic_raw=None):
@@ -447,12 +457,28 @@ def line_singers(lines, mic_act, mic_player=None, hop=HOP, mic_raw=None):
         for s, e, a, b, vals, best, _ in rows:
             if best in mic_raw:
                 led.setdefault(best, []).append(mean(mic_raw[best], a, b))
-        own = {st: float(np.median(v)) for st, v in led.items() if v}
+        own = {st: float(np.median(v)) for st, v in led.items() if len(v) >= CHANT_OWN_MIN}
     own_k, peer_k = 10 ** (-CHANT_OWN_DB / 20.0), 10 ** (-CHANT_PEER_DB / 20.0)
+    db = lambda x: 20.0 * np.log10(max(float(x), 1e-12))
+    floor = {}                                   # (lead, other) -> usual bleed, dB under the lead
+    if mic_raw:
+        diffs = {}
+        for s, e, a, b, vals, best, _ in rows:
+            if best not in mic_raw:
+                continue
+            lead_db = db(mean(mic_raw[best], a, b))
+            for st in mic_raw:
+                if st != best:
+                    diffs.setdefault((best, st), []).append(db(mean(mic_raw[st], a, b)) - lead_db)
+        floor = {k: float(np.percentile(v, CHANT_BLEED_PCT)) for k, v in diffs.items()
+                 if len(v) >= CHANT_PAIR_MIN}
 
     def sung_into(st, a, b, best):
         if not mic_raw or st not in mic_raw:
             return True
+        if (best, st) in floor:
+            d = db(mean(mic_raw[st], a, b)) - db(mean(mic_raw[best], a, b))
+            return d >= floor[(best, st)] + CHANT_OVER_DB
         r = mean(mic_raw[st], a, b)
         if st in own:
             return r >= own[st] * own_k

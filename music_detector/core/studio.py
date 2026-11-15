@@ -32,7 +32,7 @@ from music_detector.core import detectors as D
 from music_detector.core import whoplays as W
 
 SCHEMA = 1
-VERSION = 4              # 4: group chants checked for bleed (bleed_checked); 2: + ending (the last chord's ring-out); 3: solos judged on each
+VERSION = 5              # 5: chants judged per mic pair against its usual bleed; 4: group chants checked for bleed (bleed_checked); 2: + ending (the last chord's ring-out); 3: solos judged on each
                          # player's own usual level and sound (lead_sound)
 _TOM = re.compile(r"\b(tom|toms|floor)\b", re.I)
 _KS = re.compile(r"\b(kick|kik|bd|snare|snr|sd)\b", re.I)
