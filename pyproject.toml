@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "music-detector"
-version = "0.1.0"
+version = "0.2.0"
 description = "What the band is doing, read from a multitrack recording (studio mode; live mode later)."
 requires-python = ">=3.9"
 dependencies = ["numpy>=1.24"]

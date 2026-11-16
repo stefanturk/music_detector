@@ -21,12 +21,11 @@ demucs runs in whichever Python has it (it's a 2 GB install: torch). `find_pytho
 """
 import json
 import os
-import re
 import shutil
 import subprocess
-import sys
 import tempfile
-import threading
+
+from . import splitter
 
 MARKER = ".separate.json"
 MODEL = "htdemucs_6s"          # vocals, drums, bass, guitar, piano, other
@@ -38,41 +37,10 @@ PARTS = {"vocals": "vocals", "drums": "drums", "bass": "bass", "guitar": "guitar
          "piano": "keys", "other": "other"}     # demucs source -> our file name
 VERSION = 1
 
-_PCT = re.compile(r"(\d{1,3})%")
-
-
-class Cancelled(Exception):
-    pass
-
-
-def _candidates():
-    home = os.path.expanduser("~")
-    return [sys.executable, "/usr/bin/python3", "/opt/homebrew/bin/python3", "/usr/local/bin/python3",
-            os.path.join(home, "Library/Application Support/Steezy Studio/engine/python/bin/python3")]
-
-
-_found = {}
-
-
-def find_python():
-    """The first Python on this Mac that can run demucs, else None (cached for the session)."""
-    if "py" in _found:
-        return _found["py"]
-    py = None
-    seen = set()
-    for p in _candidates():
-        if not p or p in seen or not os.path.exists(p):
-            continue
-        seen.add(p)
-        try:
-            r = subprocess.run([p, "-c", "import demucs"], capture_output=True, timeout=60)
-        except (OSError, subprocess.SubprocessError):
-            continue
-        if r.returncode == 0:
-            py = p
-            break
-    _found["py"] = py
-    return py
+# The runner (starting demucs, progress, cancel, finding a Python that has it) is shared with Beat
+# Thief: see splitter.py. These names stay here so existing callers keep working.
+Cancelled = splitter.Cancelled
+find_python = splitter.find_python
 
 
 def available():
@@ -156,48 +124,13 @@ def reuse_inside(source, start, end, out_dir, model=MODEL):
 
 
 def run_demucs(py, wav, out_dir, model, *, two_stems=None, progress=None, cancel=None):
-    """Run demucs on `wav`; returns the folder holding its <source>.wav files."""
-    cmd = [py, "-m", "demucs", "-n", model, "-d", "cpu", "--shifts", "0", "-o", out_dir]
-    if two_stems:
-        cmd += ["--two-stems", two_stems]
-    cmd.append(wav)
-    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-    killed = threading.Event()
-    done = threading.Event()
-    if cancel is not None:
-        def watch():
-            while not done.wait(0.2):
-                if cancel():
-                    killed.set()
-                    proc.kill()
-                    return
-        threading.Thread(target=watch, daemon=True).start()
-    buf, last, tail = "", None, []
-    for chunk in iter(lambda: proc.stdout.read1(4096), b""):
-        text = chunk.decode(errors="ignore")
-        buf += text
-        tail = (tail + [text])[-20:]
-        frames = re.split(r"[\r\n]", buf)
-        buf = frames.pop()
-        for fr in frames:
-            m = _PCT.findall(fr)
-            if m:
-                pct = min(int(m[-1]), 100)
-                if pct != last:
-                    last = pct
-                    if progress:
-                        progress(pct)
-    proc.stdout.close()
-    proc.wait()
-    done.set()
-    if killed.is_set():
-        raise Cancelled()
-    if proc.returncode != 0:
-        raise RuntimeError(("".join(tail).strip() or "demucs failed")[-300:])
-    d = os.path.join(out_dir, model, os.path.splitext(os.path.basename(wav))[0])
-    if not os.path.isdir(d):
-        raise RuntimeError(f"demucs wrote nothing for {os.path.basename(wav)}")
-    return d
+    """Run demucs on `wav` (on the CPU, no random shift, so a re-run gives the same parts); returns
+    the folder holding its <source>.wav files. Failures raise RuntimeError with demucs' last words."""
+    try:
+        return splitter.run_demucs(py, wav, out_dir, model, device="cpu", shifts=0,
+                                   two_stems=two_stems, on_percent=progress, should_cancel=cancel)
+    except subprocess.CalledProcessError as e:
+        raise RuntimeError(((e.output or "") or "demucs failed")[-300:])
 
 
 def _to_flac(ffmpeg, src, dst):
