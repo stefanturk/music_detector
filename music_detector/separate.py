@@ -128,7 +128,8 @@ def run_demucs(py, wav, out_dir, model, *, two_stems=None, progress=None, cancel
     the folder holding its <source>.wav files. Failures raise RuntimeError with demucs' last words."""
     try:
         return splitter.run_demucs(py, wav, out_dir, model, device="cpu", shifts=0,
-                                   two_stems=two_stems, on_percent=progress, should_cancel=cancel)
+                                   two_stems=two_stems, on_percent=progress or (lambda pct: None),
+                                   should_cancel=cancel)
     except subprocess.CalledProcessError as e:
         raise RuntimeError(((e.output or "") or "demucs failed")[-300:])
 
